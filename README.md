@@ -12,5 +12,5 @@ Before running the server, you need to set up your environment variables.
 ### Environment Variables
 
 * **`PORT`**: The port the server will run on (e.g., `8080`).
-* **`DATABASE_URL`**: The full connection string for your database.
+* **`MONGODB_URL`**: The full connection string for your database.
 * **`JWT_SECRET`**: A long, random, secret string used for signing authentication tokens.
