@@ -1,5 +1,6 @@
 const express = require('express')
 var dotenv = require('dotenv')
+require('./database')
 dotenv.config()
 const port = process.env.port
 
