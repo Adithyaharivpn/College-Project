@@ -11,8 +11,12 @@ const theme = createTheme(
             },
             background:{
                 default:"#212121",
+            },
+        },
+        typography:{
+                 t:'PT Sans',
+                 cap:"'PT Sans Caption'"
             }
-        }
     }
 )
 export default theme;
