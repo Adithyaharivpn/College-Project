@@ -8,16 +8,19 @@ import {
 } from "@mui/material";
 import LocationPinIcon from "@mui/icons-material/LocationPin";
 import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
+import workerImage from "../assets/worker.png"
 
 const Body = () => {
   return (
+    <>
     <Box
       component="section"
       sx={{
-        px: 4,
-        py: 30,
+        px: { xs: 2, md: 4 },
+        py: { xs: 10, md: 40 },
         mx: "auto",
-        ml:10
+        ml: { xs: 0, md: 20 },
+        maxWidth: "1440px",
       }}
     >
       <Grid container spacing={4} alignItems="center">
@@ -45,6 +48,7 @@ const Body = () => {
             component="form"
             sx={{
               display: "flex",
+              flexDirection: { xs: "column", md: "row" },
               maxWidth: 780,
               bgcolor: "background.paper",
               borderRadius: 2,
@@ -85,7 +89,7 @@ const Body = () => {
                           color: "white",
                           borderTopLeftRadius: 0,
                           borderBottomLeftRadius: 0,
-                          p: 1.6,
+                          p: 1.9,
                           mr: -1.7,
                           flex: 2,
                         }}
@@ -100,24 +104,17 @@ const Body = () => {
                 p: 1,
                 flexGrow: 10,
                 "& .MuiOutlinedInput-root": {
-                  borderTopRightRadius: 0,
-                  borderBottomRightRadius: 0,
-                },
-                "& .MuiOutlinedInput-notchedOutline": {
-                  borderTopRightRadius: 0,
-                  borderBottomRightRadius: 0,
+                  borderTopRightRadius: "50px",
+                  borderBottomRightRadius: "50px",
                 },
               }}
             />
           </Box>
         </Grid>
-        <Grid
-          size="grow"
-          sx={{ textAlign: "right", height: "100%" }}
-        >
+        {/* <Grid size={{xs:12,md:6}} sx={{ textAlign: "right", height: "100%" }}>
           <Box
             component="img"
-            src="./src/assets/worker.png"
+            src={workerImage}
             alt="Worker with toolbox"
             sx={{
               width: "100%",
@@ -128,9 +125,26 @@ const Body = () => {
               objectFit: "contain",
             }}
           />
-        </Grid>
+        </Grid> */}
       </Grid>
     </Box>
+   <Box
+        component="img"
+        src={workerImage}
+        alt="Worker with toolbox"
+        sx={{
+          position: 'absolute', 
+          top: '50%',            
+          right: '10%',            
+          transform: 'translateY(-50%)', 
+          filter: "drop-shadow(0 0 15px rgba(0,0,0,0.1))",
+          width: '1440px',
+          height: '1080px',
+          display: { xs: 'none', lg: 'block' },
+        }}
+      >
+    </Box>
+    </>
   );
 };
 
