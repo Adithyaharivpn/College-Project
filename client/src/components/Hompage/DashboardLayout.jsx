@@ -137,6 +137,11 @@ const DashboardLayout = () => {
         badge: unreadCount,
       },
       {
+        label: "Active Works",
+        href: "/dashboard/active-works",
+        icon: <Briefcase className="h-6 w-6 shrink-0 text-foreground" />,
+      },
+      {
         label: "Market",
         href: "/dashboard/jobs",
         icon: <List className="h-6 w-6 shrink-0 text-foreground" />,

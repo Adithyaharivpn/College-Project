@@ -45,7 +45,7 @@ const SignUp = () => {
     confirmPassword: "",
     phoneNumber: "",
     role: "", // "customer" | "tradesperson"
-    tradeCategory: "",
+    tradeCategory: [],
     experience: "",
     location: "",
     lat: "",
@@ -158,10 +158,16 @@ const SignUp = () => {
     const data = new FormData();
 
     Object.keys(formData).forEach((key) => {
-      if (!["confirmPassword", "agreeToTerms"].includes(key)) {
+      if (!["confirmPassword", "agreeToTerms", "tradeCategory"].includes(key)) {
         data.append(key, formData[key]);
       }
     });
+
+    if (formData.tradeCategory && formData.tradeCategory.length > 0) {
+      formData.tradeCategory.forEach((cat) =>
+        data.append("tradeCategory", cat),
+      );
+    }
 
     if (profilePicture) data.append("profilePicture", profilePicture);
     if (verificationDocs.length > 0) {
@@ -400,23 +406,45 @@ const SignUp = () => {
               >
                 {formData.role === "tradesperson" ? (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <Select
-                        onValueChange={(val) =>
-                          handleSelectChange("tradeCategory", val)
-                        }
-                      >
-                        <SelectTrigger className="bg-background rounded-xl h-12 border-input shadow-none">
-                          <SelectValue placeholder="Specialization" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {tradeCategories.map((c) => (
-                            <SelectItem key={c._id} value={c.service_name}>
-                              {c.service_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase tracking-wider ml-1 text-dark:!text-black">
+                          Specializations (Select Multiple)
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {tradeCategories.map((c) => {
+                            const isSelected = formData.tradeCategory.includes(
+                              c.service_name,
+                            );
+                            return (
+                              <div
+                                key={c._id}
+                                onClick={() => {
+                                  const newCategories = isSelected
+                                    ? formData.tradeCategory.filter(
+                                        (cat) => cat !== c.service_name,
+                                      )
+                                    : [
+                                        ...formData.tradeCategory,
+                                        c.service_name,
+                                      ];
+                                  setFormData({
+                                    ...formData,
+                                    tradeCategory: newCategories,
+                                  });
+                                }}
+                                className={`cursor-pointer px-4 py-2 rounded-xl text-xs font-bold border transition-all ${
+                                  isSelected
+                                    ? "bg-blue-600 border-blue-600 text-white shadow-lg"
+                                    : "bg-card border-border text-foreground hover:border-blue-500"
+                                }`}
+                              >
+                                {c.service_name}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                       <Input
                         name="experience"
                         type="number"

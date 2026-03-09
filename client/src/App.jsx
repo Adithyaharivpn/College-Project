@@ -21,7 +21,6 @@ import JobPosting from "./components/User/JobPosting";
 import JobsPage from "./components/User/JobsPage";
 import VerificationRequest from "./components/User/VerificationRequest";
 import MapSearch from "./components/User/MapSearch";
-import TradespersonActiveJobs from "./components/User/TradespersonActiveJobs";
 import ChatBox from "./components/User/Chatbox";
 import Chatroom from "./components/User/Chatroom";
 import ViewDetails from "./components/User/ViewDetails";
@@ -56,7 +55,6 @@ function App() {
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
       <div className="min-h-screen bg-background text-foreground flex flex-col">
         <Routes>
-          {/* 1. PUBLIC ROUTES */}
           <Route
             path="/"
             element={
@@ -87,8 +85,6 @@ function App() {
               </>
             }
           />
-
-          {/* 2. PROTECTED DASHBOARD AREA (Sidebar Visible) */}
           <Route
             path="/dashboard"
             element={
@@ -118,7 +114,10 @@ function App() {
             <Route path="my-job-proposals/:jobId" element={<Chatroom />} />
 
             {/* Tradesperson Specific */}
-            <Route path="active-works" element={<TradespersonActiveJobs />} />
+            <Route
+              path="active-works"
+              element={<JobsPage initialTab="active" />}
+            />
             <Route path="map" element={<MapSearch />} />
             <Route path="get-verified" element={<VerificationRequest />} />
 

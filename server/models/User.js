@@ -11,7 +11,7 @@ const userSchema = new mongoose.Schema({
     required: true,
   },
   profilePictureUrl: { type: String, default: '' },
-  tradeCategory: { type: String },
+  tradeCategory: [{ type: String }],
   experience: { type: Number },
   hourlyRate: { type: Number }, // Added
   bio: { type: String }, // Added

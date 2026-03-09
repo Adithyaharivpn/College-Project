@@ -591,7 +591,17 @@ const DashboardHome = () => {
                         </span>
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />{" "}
-                          {new Date(job.createdAt).toLocaleDateString()}
+                          {job.scheduledDate
+                            ? new Date(job.scheduledDate).toLocaleDateString(
+                                "en-IN",
+                                {
+                                  day: "numeric",
+                                  month: "short",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                },
+                              )
+                            : new Date(job.createdAt).toLocaleDateString()}
                         </span>
                       </div>
                     </div>

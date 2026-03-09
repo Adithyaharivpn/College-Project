@@ -336,7 +336,9 @@ const UserProfile = () => {
                             Trade
                           </span>
                           <span className="font-bold text-lg text-foreground">
-                            {profileData.tradeCategory || "General"}
+                            {Array.isArray(profileData.tradeCategory)
+                              ? profileData.tradeCategory.join(", ")
+                              : profileData.tradeCategory || "General"}
                           </span>
                         </div>
                       </div>

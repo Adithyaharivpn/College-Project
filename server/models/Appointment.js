@@ -16,9 +16,15 @@ const appointmentSchema = new mongoose.Schema({
     ref: 'User'
   },
   date: { type: Date, required: true },
+  proposedDate: { type: Date },
+  proposedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  rescheduleRequestedAt: { type: Date },
   status: { 
     type: String, 
-    enum: ['pending', 'confirmed', 'rejected'], 
+    enum: ['pending', 'confirmed', 'rejected', 'in_transit', 'reschedule_requested'], 
     default: 'pending' 
   },
   price: { type: Number, required: true },

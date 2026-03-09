@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { postJob, getJobs, getMyJobs, getTradespersonFeed, getJobById, getTradespersonActivejobs, updateJob,completeJob,markJobAsPaid,searchLocation, cancelJob, rescheduleJob, getJobCode, depositJobFunds } = require('../controller/PostJob');
+const { postJob, getJobs, getMyJobs, getTradespersonFeed, getJobById, getTradespersonActivejobs, updateJob,completeJob,markJobAsPaid,searchLocation, cancelJob, rescheduleJob, getJobCode, depositJobFunds, startJob } = require('../controller/PostJob');
 const authMiddleware = require('../middleware/authMiddlware');
 
 
@@ -8,7 +8,7 @@ router.get('/', getJobs);
 
 router.get('/userjob', authMiddleware, getMyJobs);
 
-router.get('/feed',  getTradespersonFeed);
+router.get('/feed', authMiddleware, getTradespersonFeed);
 
 router.get('/tradesperson/my-works', authMiddleware, getTradespersonActivejobs);
 
@@ -32,6 +32,7 @@ router.put('/:id/reschedule', authMiddleware, rescheduleJob);
 
 router.put('/:id/deposit', authMiddleware, depositJobFunds);
 
+router.put('/:id/start', authMiddleware, startJob);
 
 
 
