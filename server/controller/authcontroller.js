@@ -25,8 +25,6 @@ const checkUserUnique = async (req, res) => {
     return res.status(200).json({ message: "User is unique" });
   } catch (error) {
     logger.error(`Uniqueness check error: ${error.message}`);
-    // Don't block flow on server error, but maybe warn? 
-    // For now, let's treat server error as 'unknown, let them try signup' or return error.
     return res.status(500).json({ error: "Unable to verify details" });
   }
 };

@@ -78,7 +78,7 @@ const timeAgo = (dateString) => {
   return Math.floor(seconds / 60) + "m ago";
 };
 
-const JobsPage = () => {
+const JobsPage = ({ initialTab = "open" }) => {
   const rescheduleDateRef = useRef(null);
   const [jobs, setJobs] = useState([]);
   const [myWorks, setMyWorks] = useState([]);
@@ -86,13 +86,12 @@ const JobsPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [categoryOptions, setCategoryOptions] = useState([]);
-  const [activeTab, setActiveTab] = useState("open");
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // URL Parameter Handling
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const category = params.get("category");
@@ -107,7 +106,6 @@ const JobsPage = () => {
     }
   }, [location.search]);
 
-  // Dialog States
   const [codeDialog, setCodeDialog] = useState({ open: false, code: "" });
   const [reviewDialog, setReviewDialog] = useState({
     open: false,
@@ -122,13 +120,13 @@ const JobsPage = () => {
   const [rescheduleDialog, setRescheduleDialog] = useState({
     open: false,
     jobId: null,
+    currentDate: null,
   });
   const [cancelDialog, setCancelDialog] = useState({
     open: false,
     jobId: null,
   });
 
-  // Input States
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [verifyCode, setVerifyCode] = useState("");
@@ -167,12 +165,10 @@ const JobsPage = () => {
     fetchData();
   }, [fetchData, location.search]);
 
-  // Listen for real-time review prompts & Job Updates
   useEffect(() => {
     const userId = user?._id || user?.id;
     if (!userId) return;
 
-    // Use a single socket connection
     const socket = io(import.meta.env.VITE_API_BASE_URL);
     socket.emit("addUser", userId);
 
@@ -182,7 +178,7 @@ const JobsPage = () => {
         jobId: data.jobId,
         targetId: data.targetId,
       });
-      fetchDataRef.current(); // Refresh data to update status to completed
+      fetchDataRef.current();
       toast.info("Job Completed! Please leave a review.");
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 3000);
@@ -190,7 +186,7 @@ const JobsPage = () => {
 
     socket.on("job_created", () => {
       console.log("Socket: job_created received");
-      fetchDataRef.current(); // Use ref
+      fetchDataRef.current();
       if (user.role === "tradesperson") {
         toast.info("New job available!");
       }
@@ -198,16 +194,15 @@ const JobsPage = () => {
 
     socket.on("job_updated", () => {
       console.log("Socket: job_updated received");
-      fetchDataRef.current(); // Use ref
+      fetchDataRef.current();
     });
 
     return () => {
       socket.disconnect();
     };
-  }, [user?._id || user?.id]); // Removed fetchData from deps
+  }, [user?._id || user?.id]);
 
   const handleContactCustomer = async (job) => {
-    // If Customer is clicking "Chat/Pay", handle separately or correct IDs
     const isCustomer = user.role === "customer";
 
     if (!isCustomer && user.role === "tradesperson" && !user.isVerified) {
@@ -240,22 +235,91 @@ const JobsPage = () => {
       await api.put(`/api/jobs/${cancelDialog.jobId}/cancel`);
       toast.success("Job cancelled");
       setCancelDialog({ open: false, jobId: null });
-      fetchData(); // Refresh the list
+      fetchData();
     } catch (err) {
-      toast.error("Failed to cancel");
+      toast.error(err.response?.data?.message || "Failed to cancel");
+    }
+  };
+
+  const handleStartJourney = async (job) => {
+    try {
+      if (!job.appointment || !job.appointment._id) {
+        toast.error(
+          "No linked appointment found. Please ensure a quote is accepted.",
+        );
+        return;
+      }
+      await api.put(`/api/appointments/${job.appointment._id}/start-journey`);
+      toast.success("Journey started! (Status: On The Way)");
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to start journey");
+    }
+  };
+
+  const handleStartJob = async (job) => {
+    toast.loading("Starting job...");
+    try {
+      await api.put(`/api/jobs/${job._id}/start`, { lat: 0, lng: 0 });
+      toast.dismiss();
+      toast.success("Job started successfully!");
+      fetchData();
+    } catch (err) {
+      toast.dismiss();
+      toast.error(err.response?.data?.message || "Failed to start job.");
     }
   };
 
   const handleRescheduleSubmit = async () => {
+    if (!newDate) {
+      toast.error("Please select a date first.");
+      return;
+    }
     try {
-      await api.put(`/api/jobs/${rescheduleDialog.jobId}/reschedule`, {
-        scheduledDate: newDate,
-      });
-      toast.success("Rescheduled!");
-      setRescheduleDialog({ open: false, jobId: null });
-      fetchData(); // Refresh the list
+      const jobId = rescheduleDialog.jobId;
+      const jobObj = [...jobs, ...myWorks].find(
+        (j) => (j._id?.toString() || j._id) === jobId,
+      );
+
+      if (["assigned", "in_progress"].includes(jobObj?.status?.toLowerCase())) {
+        try {
+          const isoProposedDate = new Date(newDate).toISOString();
+          await api.post(`/api/appointments/propose-reschedule`, {
+            jobId,
+            proposedDate: isoProposedDate,
+            proposedBy: user._id || user.id,
+          });
+          toast.success(
+            "Reschedule proposed! The other party must accept in chat.",
+          );
+          setRescheduleDialog({ open: false, jobId: null, currentDate: null });
+          setNewDate("");
+          fetchData();
+          return;
+        } catch (propErr) {
+          console.error("Propose Error:", propErr);
+          toast.error(
+            propErr.response?.data?.message || "Failed to propose reschedule.",
+          );
+          return;
+        }
+      }
+
+      try {
+        const isoScheduledDate = new Date(newDate).toISOString();
+        await api.put(`/api/jobs/${jobId}/reschedule`, {
+          scheduledDate: isoScheduledDate,
+        });
+        toast.success("Job rescheduled successfully!");
+        setRescheduleDialog({ open: false, jobId: null, currentDate: null });
+      } catch (jobErr) {
+        const msg = jobErr.response?.data?.message || "Could not reschedule.";
+        toast.error(msg);
+      }
+      setNewDate("");
+      fetchData();
     } catch (err) {
-      toast.error("Failed");
+      toast.error(err.response?.data?.message || "Failed to reschedule");
     }
   };
 
@@ -269,14 +333,13 @@ const JobsPage = () => {
       setVerifyDialog({ open: false, jobId: null, customerId: null });
       toast.success("Job Completed!");
 
-      // Auto-open review dialog
       setReviewDialog({
         open: true,
         jobId: verifyDialog.jobId,
         targetId: verifyDialog.customerId,
       });
 
-      fetchData(); // Refresh the list so status updates
+      fetchData();
 
       setTimeout(() => setShowConfetti(false), 3000);
     } catch (err) {
@@ -514,11 +577,13 @@ const JobsPage = () => {
                     className={`text-[10px] font-bold border-none text-white px-3 py-1 ${
                       job.status === "completed"
                         ? "bg-slate-500"
-                        : job.status === "assigned"
-                          ? "bg-amber-500"
-                          : job.status === "in_progress"
-                            ? "bg-blue-600 animate-pulse"
-                            : "bg-emerald-600"
+                        : job.status === "cancelled"
+                          ? "bg-red-500"
+                          : job.status === "assigned"
+                            ? "bg-amber-500"
+                            : job.status === "in_progress"
+                              ? "bg-blue-600 animate-pulse"
+                              : "bg-emerald-600"
                     }`}
                   >
                     {job.status}
@@ -530,61 +595,103 @@ const JobsPage = () => {
                 <p className="text-foreground/80 text-sm font-medium leading-relaxed line-clamp-3">
                   {job.description}
                 </p>
-                <div className="mt-8 flex justify-between items-center text-xs font-bold text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-blue-600" /> {job.city}
+                <div className="mt-6 space-y-2">
+                  <div className="flex justify-between items-center text-xs font-bold text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-blue-600" /> {job.city}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-blue-600" />{" "}
+                      {timeAgo(job.createdAt)}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-blue-600" />{" "}
-                    {timeAgo(job.createdAt)}
-                  </div>
+
+                  {/* Date / Schedule info — shown for both customer and tradesperson */}
+                  {job.status !== "open" &&
+                    job.status !== "cancelled" &&
+                    (job.appointment || job.scheduledDate) && (
+                      <div className="flex flex-col gap-1 mt-4 p-3 bg-muted/30 border border-border rounded-xl">
+                        <div className="text-[10px] font-black uppercase text-muted-foreground flex items-center gap-1">
+                          <CalendarDays className="h-3 w-3" /> Scheduled
+                        </div>
+                        {job.appointment ? (
+                          job.appointment.status === "reschedule_requested" ? (
+                            <div className="space-y-1 mt-1">
+                              <div className="text-xs font-black line-through opacity-50">
+                                {new Date(
+                                  job.appointment.date,
+                                ).toLocaleString()}
+                              </div>
+                              <div className="text-xs font-black text-amber-500">
+                                Proposed:{" "}
+                                {new Date(
+                                  job.appointment.proposedDate,
+                                ).toLocaleString()}
+                              </div>
+                              <p className="text-[9px] text-muted-foreground uppercase font-black tracking-widest">
+                                Check chat to accept/decline.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="text-xs font-black">
+                              {new Date(job.appointment.date).toLocaleString()}
+                              {job.appointment.status === "in_transit" && (
+                                <span className="ml-2 text-[10px] text-emerald-500 uppercase tracking-widest bg-emerald-500/10 px-2 py-0.5 rounded-md">
+                                  On the way
+                                </span>
+                              )}
+                            </div>
+                          )
+                        ) : job.scheduledDate ? (
+                          <div className="text-xs font-black">
+                            {new Date(job.scheduledDate).toLocaleString()}
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
                 </div>
               </CardContent>
               <CardFooter className="p-6 bg-muted/20 border-t border-border/50">
                 <div className="w-full flex flex-col gap-3">
-                  {user?.role === "tradesperson" &&
-                  (job.status === "assigned" ||
-                    job.status === "in_progress") ? (
-                    <Button
-                      className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold h-14 rounded-2xl text-xs border-none shadow-lg shadow-amber-500/20"
-                      onClick={() =>
-                        setVerifyDialog({
-                          open: true,
-                          jobId: job._id,
-                          customerId: job.user?._id || job.user,
-                        })
-                      }
-                    >
-                      Finish Job
-                    </Button>
-                  ) : (
-                    <JobActionController
-                      job={job}
-                      user={user}
-                      onContact={() => handleContactCustomer(job)}
-                      onViewCode={() =>
-                        setCodeDialog({ open: true, code: job.completionCode })
-                      }
-                      onReschedule={() =>
-                        setRescheduleDialog({ open: true, jobId: job._id })
-                      }
-                      onCancel={() =>
-                        setCancelDialog({ open: true, jobId: job._id })
-                      }
-                      onReview={() => {
-                        const targetId =
-                          user.role === "customer"
-                            ? job.assignedTo?._id || job.assignedTo
-                            : job.user?._id || job.user;
-                        setReviewDialog({
-                          open: true,
-                          jobId: job._id,
-                          targetId,
-                        });
-                      }}
-                      suppressDefaultDetails={true}
-                    />
-                  )}
+                  <JobActionController
+                    job={job}
+                    user={user}
+                    onContact={() => handleContactCustomer(job)}
+                    onViewCode={() =>
+                      setCodeDialog({ open: true, code: job.completionCode })
+                    }
+                    onReschedule={() =>
+                      setRescheduleDialog({
+                        open: true,
+                        jobId: job._id,
+                        currentDate: job.appointment?.date || job.scheduledDate,
+                      })
+                    }
+                    onStartJourney={handleStartJourney}
+                    onStartJob={handleStartJob}
+                    onCancel={() =>
+                      setCancelDialog({ open: true, jobId: job._id })
+                    }
+                    onReview={() => {
+                      const targetId =
+                        user.role === "customer"
+                          ? job.assignedTo?._id || job.assignedTo
+                          : job.user?._id || job.user;
+                      setReviewDialog({
+                        open: true,
+                        jobId: job._id,
+                        targetId,
+                      });
+                    }}
+                    onFinishJob={(j) =>
+                      setVerifyDialog({
+                        open: true,
+                        jobId: j._id,
+                        customerId: j.user?._id || j.user,
+                      })
+                    }
+                    suppressDefaultDetails={true}
+                  />
                   <MovingBorderButton
                     borderRadius="1rem"
                     className="bg-card font-bold text-xs text-foreground border-border"
@@ -600,7 +707,6 @@ const JobsPage = () => {
         </div>
       </div>
 
-      {/* Reschedule Dialog */}
       <Dialog
         open={rescheduleDialog.open}
         onOpenChange={(o) =>
@@ -613,10 +719,52 @@ const JobsPage = () => {
               Reschedule
             </DialogTitle>
           </DialogHeader>
+          {/* Show pending banner if appointment already has a pending reschedule */}
+          {(() => {
+            const job = [...jobs, ...myWorks].find(
+              (j) => j._id === rescheduleDialog.jobId,
+            );
+            const appt = job?.appointment;
+            if (appt?.status === "reschedule_requested" && appt?.proposedDate) {
+              return (
+                <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs font-bold text-amber-500 space-y-1">
+                  <p className="uppercase tracking-widest">
+                    ⏳ Awaiting Approval
+                  </p>
+                  <p className="font-medium text-foreground/80">
+                    You proposed:{" "}
+                    <span className="text-amber-500">
+                      {new Date(appt.proposedDate).toLocaleString()}
+                    </span>
+                  </p>
+                  <p className="text-muted-foreground">
+                    The other party must accept in chat. You can propose a
+                    different date below to replace it.
+                  </p>
+                </div>
+              );
+            }
+            return null;
+          })()}
+          {rescheduleDialog.currentDate && (
+            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-xl border border-blue-100 dark:border-blue-900/30">
+              <p className="text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 mb-1">
+                Current Schedule
+              </p>
+              <p className="text-sm font-bold">
+                {new Date(rescheduleDialog.currentDate).toLocaleString()}
+              </p>
+            </div>
+          )}
           <div className="relative mt-6">
             <Input
               type="datetime-local"
               style={{ colorScheme: "dark" }}
+              min={new Date(
+                new Date().getTime() - new Date().getTimezoneOffset() * 60000,
+              )
+                .toISOString()
+                .slice(0, 16)}
               className="h-16 rounded-xl bg-background px-5 font-bold text-lg [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer"
               value={newDate}
               onChange={(e) => setNewDate(e.target.value)}
@@ -629,12 +777,11 @@ const JobsPage = () => {
             onClick={handleRescheduleSubmit}
             className="w-full bg-blue-600 hover:bg-blue-700 h-14 rounded-2xl font-bold text-lg mt-6"
           >
-            Confirm
+            Send Request
           </Button>
         </DialogContent>
       </Dialog>
 
-      {/* Code Reveal Dialog */}
       <Dialog
         open={codeDialog.open}
         onOpenChange={(o) => setCodeDialog({ ...codeDialog, open: o })}
@@ -665,7 +812,6 @@ const JobsPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Verification Dialog */}
       <Dialog
         open={verifyDialog.open}
         onOpenChange={(o) => setVerifyDialog({ ...verifyDialog, open: o })}
@@ -692,7 +838,6 @@ const JobsPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Review Dialog */}
       <Dialog
         open={reviewDialog.open}
         onOpenChange={(o) => setReviewDialog({ ...reviewDialog, open: o })}
@@ -741,22 +886,25 @@ const JobsPage = () => {
         <AlertDialogContent className="bg-card border-border rounded-[2.5rem] p-10 max-w-md shadow-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-2xl font-bold text-center">
-              Delete Project?
+              {user?.role === "customer"
+                ? "Cancel Project?"
+                : "Cancel your commitment?"}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-center text-muted-foreground font-medium py-4">
-              This action cannot be undone. This will permanently remove the job
-              posting and any active bids.
+              {user?.role === "customer"
+                ? "Are you sure you want to cancel this job? This action cannot be undone."
+                : "This will revert the job to open status so another tradesperson can find and apply for it."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex flex-col sm:flex-row gap-4 mt-4">
             <AlertDialogCancel className="h-14 rounded-2xl border-border bg-muted/30 font-bold text-xs flex-1">
-              Keep Project
+              {user?.role === "customer" ? "Keep Project" : "Don't Cancel"}
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleCancelJob}
               className="h-14 rounded-2xl bg-red-500 hover:bg-red-600 text-white font-bold text-xs flex-1 border-none"
             >
-              Delete now
+              {user?.role === "customer" ? "Cancel now" : "Yes, Cancel"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -78,13 +78,15 @@ const ChatBox = () => {
         const msgRes = await api.get(`/api/chat/messages/${roomId}`);
         setMessages(msgRes.data);
         const roomRes = await api.get(`/api/chat/${roomId}`);
-        setRoomData(roomRes.data); // Added
+        setRoomData(roomRes.data);
         const realJobId = roomRes.data.jobId;
 
         if (realJobId) {
           const jobRes = await api.get(`/api/jobs/${realJobId}`);
           setJobDetails(jobRes.data);
-          if (["assigned", "completed"].includes(jobRes.data.status)) {
+          if (jobRes.data.isPaid && jobRes.data.isCompleted) {
+            setIsArchived(true);
+          } else if (roomRes.data.isArchived) {
             setIsArchived(true);
           }
         }
@@ -97,7 +99,6 @@ const ChatBox = () => {
     if (roomId) initData();
   }, [roomId]);
 
-  // Ref to access latest jobDetails inside socket listeners without re-running effect
   const jobDetailsRef = useRef(null);
 
   useEffect(() => {
@@ -114,7 +115,6 @@ const ChatBox = () => {
     newSocket.emit("joinRoom", roomId);
     newSocket.emit("addUser", userId);
 
-    // Global Event Listener (Server Event)
     newSocket.on("job_review_prompt", (data) => {
       setReviewDialog({
         open: true,
@@ -125,16 +125,10 @@ const ChatBox = () => {
     });
 
     newSocket.on("receiveMessage", (message) => {
-      // Just receive everything from server - simple and robust
       setMessages((prev) => [...prev, message]);
-
-      if (message.type === "system") setIsArchived(true);
-
-      // Auto-open review dialog if job is completed by the other party (Chat Message logic)
       if (message.type === "job_completed") {
         const currentJob = jobDetailsRef.current;
         if (currentJob) {
-          // Determine correct target ID based on my role
           const targetUserId =
             user.role === "customer"
               ? currentJob.assignedTo?._id || currentJob.assignedTo
@@ -146,6 +140,7 @@ const ChatBox = () => {
             targetId: targetUserId,
           });
           setJobDetails((prev) => ({ ...prev, isCompleted: true }));
+          setIsArchived(true); 
         }
       }
     });
@@ -162,7 +157,6 @@ const ChatBox = () => {
         type: "text",
       };
       socket.emit("sendMessage", payload);
-      // Removed optimistic update to prevent duplicates - relying on socket echo
       setCurrentMessage("");
     }
   };
@@ -188,7 +182,6 @@ const ChatBox = () => {
         appointmentDate: dateObj.toISOString(),
       };
       if (socket) socket.emit("sendMessage", payload);
-      // Removed optimistic update
       setIsScheduleOpen(false);
     } catch (error) {
       toast.error("Failed to propose quote");
@@ -205,10 +198,10 @@ const ChatBox = () => {
       setJobDetails((prev) => ({
         ...prev,
         status: "assigned",
-        price: msg.price, // Update price if needed
+        price: msg.price, 
         isPaid: false,
       }));
-      setIsArchived(false); // Ensure interaction is active if previously archived
+      setIsArchived(false); 
     } catch (err) {
       toast.error("Failed to confirm booking.");
     }
@@ -222,16 +215,14 @@ const ChatBox = () => {
       });
       toast.success("Job marked as completed!");
 
-      // Open Review Dialog immediately
       setReviewDialog({
         open: true,
         jobId: jobDetails._id,
-        targetId: jobDetails.user?._id || jobDetails.user, // Assuming jobDetails.user is the customer
+        targetId: jobDetails.user?._id || jobDetails.user, 
       });
 
       setJobDetails((prev) => ({ ...prev, isCompleted: true }));
 
-      // Notify other party to open review
       if (socket) {
         socket.emit("sendMessage", {
           roomId,
@@ -255,7 +246,7 @@ const ChatBox = () => {
       });
       toast.success("Review submitted!");
       setReviewDialog({ open: false, jobId: null, targetId: null });
-      window.location.reload(); // Reload after review to show final state
+      window.location.reload(); 
     } catch {
       toast.error("Failed to submit review");
     }
@@ -263,7 +254,6 @@ const ChatBox = () => {
 
   const handleQuoteAction = async (msg, status) => {
     try {
-      // Handle both populated object and string ID
       const apptId = msg.appointmentId?._id || msg.appointmentId;
 
       await api.put(`/api/appointments/${apptId}`, { status });
@@ -280,12 +270,10 @@ const ChatBox = () => {
 
       toast.success(actionText);
 
-      // Update local state without reload
       setMessages((prev) =>
         prev.map((m) => {
           const mApptId = m.appointmentId?._id || m.appointmentId;
           if (mApptId === apptId) {
-            // Update status regardless of whether it's an object or string ID
             if (typeof m.appointmentId === "object") {
               return {
                 ...m,
@@ -306,24 +294,79 @@ const ChatBox = () => {
     }
   };
 
+  const handleRescheduleAccept = async (msg) => {
+    try {
+      const apptId = msg.appointmentId?._id || msg.appointmentId;
+      await api.patch(`/api/appointments/${apptId}/reschedule-accept`);
+      toast.success("Reschedule Request Accepted!");
+
+      const payload = {
+        roomId,
+        senderId: user._id || user.id,
+        text: `[INFO]: Reschedule Accepted by ${user.name}`,
+        type: "text",
+      };
+      if (socket) socket.emit("sendMessage", payload);
+      window.location.reload();
+    } catch (err) {
+      toast.error("Failed to accept reschedule");
+    }
+  };
+
+  const handleRescheduleDecline = async (msg) => {
+    try {
+      const apptId = msg.appointmentId?._id || msg.appointmentId;
+      await api.patch(`/api/appointments/${apptId}/reschedule-decline`);
+      toast.success("Reschedule Request Declined!");
+
+      const payload = {
+        roomId,
+        senderId: user._id || user.id,
+        text: `[INFO]: Reschedule Declined by ${user.name}`,
+        type: "text",
+      };
+      if (socket) socket.emit("sendMessage", payload);
+      window.location.reload();
+    } catch (err) {
+      toast.error("Failed to decline reschedule");
+    }
+  };
+
   const renderMessage = (msg) => {
     if (msg.type === "appointment") {
       const isMe =
         msg.sender?._id === (user._id || user.id) ||
         msg.sender === (user._id || user.id);
-      const apptStatus = msg.appointmentId?.status || "pending"; // Default to pending if not populated yet
+
+      const appointmentObj = msg.appointmentId || {};
+      const apptStatus = appointmentObj.status || "pending";
+      const isRescheduleRequested = apptStatus === "reschedule_requested";
+      const proposedDate = appointmentObj.proposedDate;
+      const proposedBy = appointmentObj.proposedBy;
+      const isMyProposal = proposedBy === (user._id || user.id);
 
       return (
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-blue-400 font-black text-[10px] uppercase tracking-widest">
-            <Calendar className="h-3 w-3" /> Proposed Quote
+            <Calendar className="h-3 w-3" />{" "}
+            {isRescheduleRequested ? "Reschedule Proposed" : "Proposed Quote"}
           </div>
           <div className="text-xl font-black italic">₹{msg.price}</div>
-          <div className="text-[10px] font-bold opacity-70">
+
+          <div
+            className={`text-[10px] font-bold ${isRescheduleRequested ? "line-through opacity-50" : "opacity-70"}`}
+          >
             {new Date(msg.appointmentDate).toLocaleString()}
           </div>
 
-          {apptStatus === "pending" ? (
+          {isRescheduleRequested && proposedDate && (
+            <div className="text-[10px] font-bold text-amber-400 mt-1 flex items-center gap-1 bg-amber-400/10 p-2 rounded-lg">
+              <Calendar className="h-3 w-3" /> New:{" "}
+              {new Date(proposedDate).toLocaleString()}
+            </div>
+          )}
+
+          {apptStatus === "pending" && (
             <div className="flex gap-2 pt-2">
               {!isMe && user.role === "customer" && !isArchived && (
                 <>
@@ -356,13 +399,46 @@ const ChatBox = () => {
                 </Button>
               )}
             </div>
-          ) : (
-            <div className="mt-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground border border-border p-2 rounded-lg text-center">
-              {apptStatus === "cancelled"
-                ? "Quote Cancelled"
-                : "Quote Processed"}
+          )}
+
+          {isRescheduleRequested && !isArchived && (
+            <div className="flex gap-2 pt-2">
+              {!isMyProposal ? (
+                <>
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] h-8 px-4 rounded-lg"
+                    onClick={() => handleRescheduleAccept(msg)}
+                  >
+                    Accept New Date
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="font-black text-[10px] h-8 px-4 rounded-lg"
+                    onClick={() => handleRescheduleDecline(msg)}
+                  >
+                    Decline
+                  </Button>
+                </>
+              ) : (
+                <div className="text-[10px] font-black uppercase tracking-widest text-amber-500 border border-amber-500/20 p-2 rounded-lg text-center w-full">
+                  Waiting for partner to accept
+                </div>
+              )}
             </div>
           )}
+
+          {apptStatus !== "pending" &&
+            apptStatus !== "reschedule_requested" && (
+              <div className="mt-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground border border-border p-2 rounded-lg text-center">
+                {apptStatus === "cancelled"
+                  ? "Quote Cancelled"
+                  : apptStatus === "confirmed" || apptStatus === "in_transit"
+                    ? "Quote Confirmed"
+                    : "Quote Processed"}
+              </div>
+            )}
         </div>
       );
     }

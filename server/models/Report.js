@@ -21,7 +21,7 @@ const reportSchema = new mongoose.Schema({
   reason: {
     type: String,
     required: true,
-    enum: ['payment_off_platform', 'harassment', 'scam', 'no_show', 'other']
+    enum: ['payment_off_platform', 'harassment', 'scam', 'no_show', 'other', 'late_cancellation']
   },
   description: {
     type: String,
